@@ -3,26 +3,25 @@ package main
 import (
 	"context"
 	"log/slog"
+	"time"
 )
 
-// unbuffered channel is a sychronous communication -> make(chan string) -> no pass size
-// buffered channel is async communication -> make(chan string, 3)
-func main() {
-	charChannel := make(chan string, 3)
-	chars := []string{"a", "b", "c"}
-
-	for _, char := range chars {
+func doWork(done <-chan bool) {
+	for {
 		select {
-		case charChannel <- char:
+		case <-done:
+			return
+		default:
+			log("DOING WORK!")
 		}
 	}
+}
 
-	close(charChannel)
-
-	for result := range charChannel {
-		log(result)
-	}
-
+func main() {
+	done := make(chan bool)
+	go doWork(done)
+	time.Sleep(time.Second * 3)
+	close(done)
 }
 
 func log(msg string) {
