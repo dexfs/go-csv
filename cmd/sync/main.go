@@ -7,25 +7,18 @@ import (
 	"log"
 	"log/slog"
 	"os"
-	"strings"
 	"time"
 )
 
 const (
-	FileTitulosV1   = "dataset/v1_titulos.csv"
-	FileContractsV2 = "dataset/v2_contracts.csv"
-	FileTitulosV2   = "dataset/v2_titulos.csv"
-	FileOutput      = "output.csv"
+	File01     = "dataset/file_01.csv"
+	File02     = "dataset/file_02.csv"
+	File03     = "dataset/file_03.csv"
+	FileOutput = "output.csv"
 )
 
 var progressBar *progressbar.ProgressBar
 
-/*
-*
-Mapa files
-contract idx0 v2, idx1 v1
-titulos idx0 v2, idx2 total
-*/
 func main() {
 	lineCount := 0
 	found := 0
@@ -33,47 +26,43 @@ func main() {
 
 	time.Sleep(1 * time.Second)
 	start := time.Now()
-	// SCANNERS
+
 	slog.Info("Starting combine data")
+	var err error
+	allDataFile01, err := ReadAllFile(File01)
 
-	scannerContractsV2, fileCV2 := ReadFileByLine(FileContractsV2)
-
-	var combinedContracts [][]string
-
-	titulosV1, err := ReadAllFile(FileTitulosV1)
 	if err != nil {
 		log.Fatal(err)
 	}
-	progressBar = progressbar.Default(-1, "Reading Contracts...")
-	for scannerContractsV2.Scan() {
+
+	allDataFile02, err := ReadAllFile(File02)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var combinedData [][]string
+
+	progressBar = progressbar.Default(int64(len(allDataFile02)), "Reading data of File 02...")
+	for _, itemFile02 := range allDataFile02 {
 		progressBar.Add(1)
 		lineCount++
-		line := scannerContractsV2.Text()
-		rowV2 := strings.Split(line, ",")
-		//if found == 50000 {
-		//	break
-		//}
 
-		if rowV2[2] == "CANCELED" {
+		if itemFile02[2] == "CANCELED" {
 			continue
 		}
 
-		for _, rowV1 := range titulosV1 {
-
-			// uuid | uuid
-			if rowV2[1] == rowV1[0] {
+		for _, itemFile01 := range allDataFile01 {
+			if itemFile02[1] == itemFile01[0] {
 				found++
-				tempCombined := []string{rowV1[0], rowV2[0], rowV1[1]} // uuid, cuid, number
-				combinedContracts = append(combinedContracts, tempCombined)
+				tempCombined := []string{itemFile01[0], itemFile02[0], itemFile01[1]}
+				combinedData = append(combinedData, tempCombined)
 			}
 		}
 	}
 
-	fileCV2.Close()
-
 	var toAnalysis [][]string
 
-	if len(combinedContracts) <= 0 {
+	if len(combinedData) <= 0 {
 		log.Fatal("No contracts found")
 	}
 
@@ -81,29 +70,29 @@ func main() {
 	progressBar.Reset()
 	progressBar.Describe("Processing Combination...")
 	progressBar.Clear()
-	allTitulosV2, err := ReadAllFile(FileTitulosV2)
+	progressBar.ChangeMax(len(combinedData))
+
+	allDataFile03, err := ReadAllFile(File03)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	for i := range combinedContracts {
+	for i := range combinedData {
 		progressBar.Add(1)
-		rowCombined := combinedContracts[i] // uuid, cuid, total
+		rowCombined := combinedData[i]
 
-		for _, current := range allTitulosV2 {
-			// current [internal_id, total]
-			isSameId := current[0] == rowCombined[1] // cuid
+		for _, current := range allDataFile03 {
+			isSameId := current[0] == rowCombined[1]
 			if !isSameId {
 				continue
 			}
 
-			isDiffTotal := current[1] != rowCombined[2] // total is diff
+			isDiffTotal := current[1] != rowCombined[2]
 			if !isDiffTotal {
 				continue
 			}
 
 			generated++
-			// external_id, total, internal_id, total
 			toAnalysis = append(toAnalysis, []string{rowCombined[0], rowCombined[2], current[0], current[1]})
 		}
 	}
