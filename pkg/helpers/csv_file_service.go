@@ -37,6 +37,12 @@ func (w *CSVAdapter) Append(body []string) error {
 	return w.writer.Write(body)
 }
 
+func (w *CSVAdapter) BullkAppend(body [][]string) {
+	for _, row := range body {
+		w.writer.Write(row)
+	}
+}
+
 func (w *CSVAdapter) ReadAll() ([][]string, error) {
 	return w.reader.ReadAll()
 }
