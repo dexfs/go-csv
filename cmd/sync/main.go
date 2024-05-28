@@ -3,8 +3,9 @@ package main
 import (
 	"bufio"
 	"encoding/csv"
-	"fmt"
+	"github.com/schollz/progressbar/v3"
 	"log"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -16,6 +17,8 @@ const (
 	FileTitulosV2   = "dataset/v2_titulos.csv"
 	FileOutput      = "output.csv"
 )
+
+var progressBar *progressbar.ProgressBar
 
 /*
 *
@@ -31,12 +34,19 @@ func main() {
 	time.Sleep(1 * time.Second)
 	start := time.Now()
 	// SCANNERS
-	fmt.Println("Starting combine data")
+	slog.Info("Starting combine data")
+
 	scannerContractsV2, fileCV2 := ReadFileByLine(FileContractsV2)
 
 	var combinedContracts [][]string
 
+	titulosV1, err := ReadAllFile(FileTitulosV1)
+	if err != nil {
+		log.Fatal(err)
+	}
+	progressBar = progressbar.Default(-1, "Reading Contracts...")
 	for scannerContractsV2.Scan() {
+		progressBar.Add(1)
 		lineCount++
 		line := scannerContractsV2.Text()
 		rowV2 := strings.Split(line, ",")
@@ -48,10 +58,8 @@ func main() {
 			continue
 		}
 
-		scannerTitulosV1, fileCV1 := ReadFileByLine(FileTitulosV1)
-		for scannerTitulosV1.Scan() {
-			lineV1 := scannerTitulosV1.Text()
-			rowV1 := strings.Split(lineV1, ",")
+		for _, rowV1 := range titulosV1 {
+
 			// uuid | uuid
 			if rowV2[1] == rowV1[0] {
 				found++
@@ -59,8 +67,8 @@ func main() {
 				combinedContracts = append(combinedContracts, tempCombined)
 			}
 		}
-		fileCV1.Close()
 	}
+
 	fileCV2.Close()
 
 	var toAnalysis [][]string
@@ -69,40 +77,50 @@ func main() {
 		log.Fatal("No contracts found")
 	}
 
-	fmt.Println("Starting generate data to save")
+	slog.Info("Starting generate data to save")
+	progressBar.Reset()
+	progressBar.Describe("Processing Combination...")
+	progressBar.Clear()
+	allTitulosV2, err := ReadAllFile(FileTitulosV2)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	for i := range combinedContracts {
+		progressBar.Add(1)
 		rowCombined := combinedContracts[i] // uuid, cuid, total
-		scannerTitulosV2, fileTituloV2 := ReadFileByLine(FileTitulosV2)
-		for scannerTitulosV2.Scan() {
+
+		for _, current := range allTitulosV2 {
 			// current [internal_id, total]
-			line := scannerTitulosV2.Text()
-			current := strings.Split(line, ",")      // cuid, number
 			isSameId := current[0] == rowCombined[1] // cuid
 			if !isSameId {
 				continue
 			}
 
 			isDiffTotal := current[1] != rowCombined[2] // total is diff
-
-			if isSameId && isDiffTotal {
-				generated++
-				// external_id, total, internal_id, total
-				toAnalysis = append(toAnalysis, []string{rowCombined[0], rowCombined[2], current[0], current[1]})
+			if !isDiffTotal {
+				continue
 			}
+
+			generated++
+			// external_id, total, internal_id, total
+			toAnalysis = append(toAnalysis, []string{rowCombined[0], rowCombined[2], current[0], current[1]})
 		}
-		fileTituloV2.Close()
 	}
 
 	/// WRITE FILE
-	err := WriteFile(FileOutput, toAnalysis)
+	progressBar.Reset()
+	progressBar.Describe("Writing file...")
+	progressBar.Clear()
+	progressBar.ChangeMax(len(toAnalysis))
+	err = WriteFile(FileOutput, toAnalysis)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println("Total records: ", lineCount)
-	fmt.Println("Total records generated: ", generated)
-	fmt.Println("Process finished!", time.Since(start))
+	slog.Info("Total records: ", lineCount)
+	slog.Info("Total records generated: ", generated)
+	slog.Info("Process finished!", time.Since(start))
 }
 
 func ReadFileByLine(filename string) (*bufio.Scanner, *os.File) {
@@ -119,6 +137,17 @@ func ReadFileByLine(filename string) (*bufio.Scanner, *os.File) {
 	return scanner, file
 }
 
+func ReadAllFile(filename string) ([][]string, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+	reader := csv.NewReader(file)
+
+	return reader.ReadAll()
+}
+
 func WriteFile(filename string, records [][]string) error {
 	fileHeader := []string{"external_id", "total", "contract_id", "total"}
 	fileWrite, err := os.Create(filename)
@@ -132,6 +161,7 @@ func WriteFile(filename string, records [][]string) error {
 	defer writer.Flush()
 	writer.Write(fileHeader)
 	for _, record := range records {
+		progressBar.Add(1)
 		writer.Write(record)
 	}
 
