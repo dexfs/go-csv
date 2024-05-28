@@ -39,3 +39,14 @@ func ReadFileByLine(filename string) (*bufio.Scanner, *os.File) {
 
 	return scanner, file
 }
+
+func ReadAllFile(filename string) ([][]string, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+	reader := csv.NewReader(file)
+
+	return reader.ReadAll()
+}
