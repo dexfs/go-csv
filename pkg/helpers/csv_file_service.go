@@ -3,12 +3,14 @@ package helpers
 import (
 	"encoding/csv"
 	"os"
+	"sync"
 )
 
 type CSVAdapter struct {
 	file   *os.File
 	writer *csv.Writer
 	reader *csv.Reader
+	once   sync.Once
 }
 
 func NewCSVAdapter(filename string) (*CSVAdapter, error) {
@@ -26,7 +28,9 @@ func NewCSVAdapter(filename string) (*CSVAdapter, error) {
 }
 
 func (w *CSVAdapter) AppendHeader(header []string) {
-	w.writer.Write(header)
+	w.once.Do(func() {
+		w.writer.Write(header)
+	})
 }
 
 func (w *CSVAdapter) Append(body []string) error {
