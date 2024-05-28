@@ -6,25 +6,25 @@ import (
 	"math/rand"
 )
 
-func NewV1Contract() *V1Contract {
+func NewSchema01() *DataSchema01 {
 	id := uuid.Must(uuid.NewV4())
-	return &V1Contract{
+	return &DataSchema01{
 		ContractID: id.String(),
 		Total:      rand.Intn(50),
 	}
 }
 
-func NewV2Contract(externalID string) *V2Contract {
+func NewSchema02(externalID string) *DataSchema02 {
 	id := cuid2.Generate()
-	return &V2Contract{
+	return &DataSchema02{
 		ID:         id,
 		ExternalID: externalID,
 		Status:     RandomState(),
 	}
 }
 
-func NewV2Titulos(contractID string) *V2Titulos {
-	return &V2Titulos{
+func NewSchema03(contractID string) *DataSchema03 {
+	return &DataSchema03{
 		ContractID: contractID,
 		Total:      rand.Intn(50),
 	}

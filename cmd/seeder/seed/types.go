@@ -1,17 +1,17 @@
 package seed
 
-type V1Contract struct {
+type DataSchema01 struct {
 	ContractID string `json:"contract_id"`
 	Total      int    `json:"total"`
 }
 
-type V2Contract struct {
+type DataSchema02 struct {
 	ID         string `json:"id"`
 	ExternalID string `json:"external_id"`
 	Status     string `json:"status"`
 }
 
-type V2Titulos struct {
+type DataSchema03 struct {
 	ContractID string `json:"contract_id"`
 	Total      int    `json:"total"`
 }

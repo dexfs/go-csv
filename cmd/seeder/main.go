@@ -16,19 +16,19 @@ var wg sync.WaitGroup
 
 func main() {
 	start := time.Now()
-	amount := 100
+	amount := 298_000
 	pb = progressbar.Default(int64(amount), "Processing!")
 	slog.Info("Starting seed for", amount, " items")
 
-	var v1Contracts []*seed.V1Contract
+	var schema01 []*seed.DataSchema01
 	for i := 0; i < amount; i++ {
 		pb.Add(1)
-		v1Contracts = append(v1Contracts, seed.NewV1Contract())
+		schema01 = append(schema01, seed.NewSchema01())
 	}
 
-	genContractsV1Channel := GenContractsV1DataChannel(v1Contracts, &wg)
-	genContractsV2Channel := GenContractsV2DataChannel(genContractsV1Channel, &wg)
-	genTitulosV2Channel := GenTitulosV2DataChannel(genContractsV2Channel, &wg)
+	data01 := GenDataset01(schema01, &wg)
+	data02 := GenDataset02(data01, &wg)
+	data03 := GenDataset03(data02, &wg)
 
 	go func() {
 		wg.Wait()
@@ -36,22 +36,18 @@ func main() {
 
 	for {
 		select {
-		case _, ok := <-genTitulosV2Channel:
+		case _, ok := <-data03:
 			if !ok {
 				slog.Info("Process finished!", time.Since(start))
 				return
 			}
 		}
 	}
-
-	//typeC := reflect.TypeOf(contract)
-	//field := typeC.Field(0)
-	//fmt.Println(field.Tag.Get("json"))
 }
 
-func GenTitulosV2DataChannel(in <-chan *seed.V2Contract, wg *sync.WaitGroup) <-chan *seed.V2Titulos {
+func GenDataset03(in <-chan *seed.DataSchema02, wg *sync.WaitGroup) <-chan *seed.DataSchema03 {
 	wg.Add(1)
-	out := make(chan *seed.V2Titulos)
+	out := make(chan *seed.DataSchema03, 6)
 	go func() {
 		csvAdapter, err := helpers.NewCSVAdapter("dataset/out_v2_titulos.csv")
 		defer close(out)
@@ -60,19 +56,20 @@ func GenTitulosV2DataChannel(in <-chan *seed.V2Contract, wg *sync.WaitGroup) <-c
 		if err != nil {
 			panic(err)
 		}
-		for cv2 := range in {
-			t := seed.NewV2Titulos(cv2.ID)
-			fromStructToCSV := []string{t.ContractID, strconv.Itoa(t.Total)}
+		for item := range in {
+			schema := seed.NewSchema03(item.ID)
+			csvAdapter.AppendHeader([]string{GetTag(*schema, 0), GetTag(*schema, 1)})
+			fromStructToCSV := []string{schema.ContractID, strconv.Itoa(schema.Total)}
 			csvAdapter.Append(fromStructToCSV)
-			out <- t
+			out <- schema
 		}
 	}()
 	return out
 }
 
-func GenContractsV2DataChannel(in <-chan *seed.V1Contract, wg *sync.WaitGroup) <-chan *seed.V2Contract {
+func GenDataset02(in <-chan *seed.DataSchema01, wg *sync.WaitGroup) <-chan *seed.DataSchema02 {
 	wg.Add(1)
-	out := make(chan *seed.V2Contract)
+	out := make(chan *seed.DataSchema02, 6)
 	go func() {
 		csvAdapter, err := helpers.NewCSVAdapter("dataset/out_v2_contracts.csv")
 		defer close(out)
@@ -81,33 +78,35 @@ func GenContractsV2DataChannel(in <-chan *seed.V1Contract, wg *sync.WaitGroup) <
 		if err != nil {
 			panic(err)
 		}
-		for v := range in {
-			c := seed.NewV2Contract(v.ContractID)
-			fromStructToCSV := []string{c.ID, c.ExternalID, c.Status}
+		for item := range in {
+			schema := seed.NewSchema02(item.ContractID)
+			csvAdapter.AppendHeader([]string{GetTag(*schema, 0), GetTag(*schema, 1), GetTag(*schema, 2)})
+			fromStructToCSV := []string{schema.ID, schema.ExternalID, schema.Status}
 			csvAdapter.Append(fromStructToCSV)
-			out <- c
+			out <- schema
 		}
 		wg.Done()
 	}()
 	return out
 }
 
-func GenContractsV1DataChannel(items []*seed.V1Contract, wg *sync.WaitGroup) <-chan *seed.V1Contract {
+func GenDataset01(items []*seed.DataSchema01, wg *sync.WaitGroup) <-chan *seed.DataSchema01 {
 	wg.Add(1)
-	out := make(chan *seed.V1Contract)
+	out := make(chan *seed.DataSchema01, 7)
 	pb.Reset()
 	pb.Describe("Adicionando dados no arquivo...")
 	go func() {
 		defer close(out)
-		csvAdapter, err := helpers.NewCSVAdapter("dataset/out_v1_contracts.csv")
+		csvAdapter, err := helpers.NewCSVAdapter("dataset/data_01.csv")
 		if err != nil {
 			panic(err)
 		}
-		for _, contract := range items {
-			fromStructToCSV := []string{contract.ContractID, strconv.Itoa(contract.Total)}
+		for _, item := range items {
+			csvAdapter.AppendHeader([]string{GetTag(*item, 0), GetTag(*item, 1)})
+			fromStructToCSV := []string{item.ContractID, strconv.Itoa(item.Total)}
 			csvAdapter.Append(fromStructToCSV)
 			pb.Add(1)
-			out <- contract
+			out <- item
 		}
 		csvAdapter.End()
 		wg.Done()
